@@ -1,302 +1,259 @@
- and Elastic IPs
-- **Cost Issue Detection**: Identifies over-provisioned resources, unused resources, and misconfigurations
-- **AI-Powered Analysis**: Uses Groq API to provide intelligent cost optimization recommendations
-- **Live Progress Updates**: Real-time WebSocket updates during scanning
-- **Detailed Reports**: Comprehensive cost breakdown with fix commands
-- **JWT Authentication**: Secure user authentication with signup/login
+# AI Cloud Cost Detective 🔍
 
-## Tech Stack
+An AI-powered full-stack web application that scans your AWS resources, detects cost inefficiencies, and provides actionable fix commands with estimated monthly savings.
 
-### Backend
-- **FastAPI**: Modern Python web framework
-- **PostgreSQL**: Database for storing scans and analysis results
-- **SQLAlchemy**: ORM for database operations
-- **Boto3**: AWS SDK for resource scanning
-- **Groq API**: AI-powered cost analysis
-- **PyJWT + bcrypt**: JWT authentication
-- **WebSocket**: Real-time progress streaming
+## 🎯 What It Does
 
-### Frontend
-- **React**: UI framework
-- **Vite**: Build tool
-- **TypeScript**: Type safety
-- **Tailwind CSS**: Styling
-- **React Router**: Navigation
-- **Axios**: HTTP client
-- **Lucide React**: Icons
+- Scans AWS resources (EC2, RDS, S3, Elastic IPs, Load Balancers) using Boto3
+- Uses Groq AI (LLaMA 3.3 70B) to analyze resources for cost issues
+- Detects over-provisioned, unused, and misconfigured resources
+- Provides exact AWS CLI commands to fix each issue
+- Shows estimated monthly savings
+- Stores analysis history in PostgreSQL
+- Real-time progress tracking via polling
 
-## Prerequisites
+## 🏗️ Architecture
 
-- Python 3.9+
+```
+User → React Frontend (Vite + TypeScript + Tailwind)
+              ↓
+       FastAPI Backend
+         ↙    ↓    ↘
+   Boto3   Groq AI  PostgreSQL
+   (AWS)  (Analysis) (History)
+```
+
+## 🛠️ Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React + Vite + TypeScript + Tailwind CSS |
+| Backend | Python FastAPI |
+| Auth | Custom JWT (PyJWT + bcrypt) |
+| Cloud Scanner | AWS Boto3 |
+| AI Analysis | Groq API (llama-3.3-70b-versatile) |
+| Database | PostgreSQL (Docker) |
+| Progress | Polling (every 2 seconds) |
+
+## 📋 Prerequisites
+
+- Python 3.10+
 - Node.js 18+
-- PostgreSQL 13+
-- AWS Account with appropriate IAM permissions
-- Groq API key
+- Docker
+- AWS Account with IAM credentials
+- Groq API key (free at console.groq.com)
 
-## Environment Variables
-
-### Backend (`.env` in `/backend` directory)
-```bash
-DATABASE_URL=postgresql://user:password@localhost:5432/cloud_cost_detective
-JWT_SECRET_KEY=your-secret-key-here-change-in-production
-GROQ_API_KEY=your-groq-api-key
-AWS_ACCESS_KEY_ID=your-aws-access-key
-AWS_SECRET_ACCESS_KEY=your-aws-secret-key
-AWS_REGION=us-east-1
-```
-
-### Frontend (`.env` in `/frontend` directory)
-```bash
-VITE_API_URL=http://localhost:8000
-```
-
-## Setup Instructions
+## 🚀 Setup & Installation
 
 ### 1. Clone the Repository
+
 ```bash
-git clone <repository-url>
+git clone https://github.com/rvijay234/ai-cloud-cost-detective.git
 cd ai-cloud-cost-detective
 ```
 
-### 2. Backend Setup
+### 2. Start PostgreSQL with Docker
 
-#### Install Python Dependencies
+```bash
+docker run -d \
+  --name cost-detective-db \
+  -e POSTGRES_USER=costadmin \
+  -e POSTGRES_PASSWORD=costpass123 \
+  -e POSTGRES_DB=costdetective \
+  -p 5432:5432 \
+  -v costdetective_data:/var/lib/postgresql/data \
+  postgres:16-alpine
+```
+
+Verify it's running:
+```bash
+docker ps | grep cost-detective-db
+```
+
+### 3. Backend Setup
+
 ```bash
 cd backend
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# Install dependencies
 pip install -r requirements.txt
-```
 
-#### Set Up PostgreSQL Database
-```bash
-# Create database
-createdb cloud_cost_detective
-
-# Or using psql
-psql -U postgres
-CREATE DATABASE cloud_cost_detective;
-\q
-```
-
-#### Configure Environment Variables
-```bash
+# Create .env file
 cp .env.example .env
-# Edit .env with your actual values
+nano .env
 ```
 
-#### Initialize Database
+Fill in your `.env`:
+```
+GROQ_API_KEY=your_groq_api_key
+AWS_ACCESS_KEY_ID=your_aws_access_key
+AWS_SECRET_ACCESS_KEY=your_aws_secret_key
+AWS_REGION=ap-southeast-2
+DATABASE_URL=postgresql://costadmin:costpass123@localhost:5432/costdetective
+JWT_SECRET_KEY=your_random_secret_string
+```
+
+Run the backend:
 ```bash
-# The database tables will be created automatically when you run the app
-# Or manually:
-python -c "from database import engine, Base; Base.metadata.create_all(bind=engine)"
+uvicorn main:app --reload --host 0.0.0.0 --port 8001
 ```
 
-### 3. Frontend Setup
+API docs available at: `http://localhost:8001/docs`
 
-#### Install Node Dependencies
+### 4. Frontend Setup
+
 ```bash
 cd frontend
+
+# Install dependencies
 npm install
-```
 
-#### Configure Environment Variables
-```bash
-cp .env.example .env
-# Edit .env if needed (defaults to http://localhost:8000)
-```
-
-### 4. Run the Application
-
-#### Start Backend Server
-```bash
-cd backend
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
-
-#### Start Frontend Development Server
-```bash
-cd frontend
+# Run the frontend
 npm run dev
 ```
 
-#### Access the Application
-- Frontend: http://localhost:5173
-- Backend API: http://localhost:8000
-- API Documentation: http://localhost:8000/docs
+Frontend available at: `http://localhost:5173`
 
-## Usage
-
-### 1. Sign Up
-- Navigate to http://localhost:5173
-- Click "Sign up" and create an account
-
-### 2. Start a Scan
-- After logging in, click "New Scan" on the dashboard
-- The scan will automatically detect AWS resources in your configured region
-
-### 3. View Results
-- Watch the scan progress in real-time via WebSocket updates
-- Once complete, view the detailed cost analysis report
-- Review AI-powered recommendations with fix commands
-
-### 4. Apply Recommendations
-- Copy the provided AWS CLI commands
-- Execute them to optimize your AWS resources
-
-## AWS IAM Permissions
-
-The AWS credentials used must have the following permissions:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "ec2:DescribeInstances",
-        "ec2:DescribeAddresses",
-        "ec2:DescribeTags",
-        "rds:DescribeDBInstances",
-        "s3:ListAllMyBuckets",
-        "s3:GetBucketLocation",
-        "s3:ListObjectsV2",
-        "elasticloadbalancing:DescribeLoadBalancers",
-        "elasticloadbalancing:DescribeLoadBalancerAttributes"
-      ],
-      "Resource": "*"
-    }
-  ]
-}
-```
-
-## Project Structure
+## 📁 Project Structure
 
 ```
 ai-cloud-cost-detective/
 ├── backend/
-│   ├── main.py              # FastAPI application
-│   ├── config.py            # Configuration settings
-│   ├── database.py          # Database connection
-│   ├── models.py            # SQLAlchemy models
-│   ├── schemas.py           # Pydantic schemas
+│   ├── main.py              # FastAPI app, routes, background tasks
+│   ├── aws_scanner.py       # Boto3 AWS resource scanning
+│   ├── groq_analyzer.py     # Groq AI cost analysis
+│   ├── db.py                # SQLAlchemy models and DB connection
 │   ├── auth.py              # JWT authentication
-│   ├── aws_scanner.py       # AWS resource scanning
-│   ├── cost_analyzer.py     # Cost issue detection
-│   ├── groq_analyzer.py     # AI analysis integration
-│   ├── websocket.py         # WebSocket manager
 │   ├── requirements.txt     # Python dependencies
 │   └── .env.example         # Environment variables template
 ├── frontend/
 │   ├── src/
-│   │   ├── pages/           # React pages
-│   │   ├── contexts/        # React contexts
-│   │   ├── App.tsx          # Main app component
-│   │   ├── main.tsx         # Entry point
-│   │   └── index.css        # Tailwind CSS
-│   ├── package.json         # Node dependencies
-│   ├── vite.config.ts       # Vite configuration
-│   ├── tailwind.config.js   # Tailwind configuration
-│   └── .env.example         # Environment variables template
-├── .gitignore
+│   │   ├── App.tsx          # React Router setup
+│   │   ├── contexts/
+│   │   │   └── AuthContext.tsx    # JWT management
+│   │   ├── pages/
+│   │   │   ├── Login.tsx         # Login page
+│   │   │   ├── Signup.tsx        # Signup page
+│   │   │   ├── Dashboard.tsx     # Main dashboard
+│   │   │   ├── Report.tsx        # Analysis report
+│   │   │   └── History.tsx       # Past analyses
+│   │   └── components/
+│   │       ├── Navbar.tsx        # Navigation
+│   │       └── ProgressTracker.tsx # Analysis progress
+│   ├── vite.config.ts       # Vite + proxy config
+│   └── package.json
 └── README.md
 ```
 
-## API Endpoints
+## 🔌 API Endpoints
 
-### Authentication
-- `POST /api/auth/signup` - Create a new user
-- `POST /api/auth/login` - Login and get JWT token
-- `GET /api/auth/me` - Get current user info
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| POST | `/api/auth/signup` | Create account | No |
+| POST | `/api/auth/login` | Login, get JWT | No |
+| GET | `/api/auth/me` | Get current user | Yes |
+| GET | `/api/regions` | List AWS regions | No |
+| POST | `/api/analyze` | Start cost analysis | Yes |
+| GET | `/api/history` | Get past analyses | Yes |
+| GET | `/api/analysis/{id}` | Get analysis details | Yes |
 
-### Scans
-- `POST /api/scans` - Start a new scan
-- `GET /api/scans` - List all scans for current user
-- `GET /api/scans/{id}` - Get scan details with resources and analysis
+## 💡 What It Detects
 
-### WebSocket
-- `WS /ws/scans/{scan_id}` - Real-time scan progress updates
+- **Unused Elastic IPs** — EIPs not attached to running instances (costs ~$3/month each)
+- **Over-provisioned EC2** — Instances sized larger than needed
+- **Unused RDS instances** — Idle database instances
+- **S3 without lifecycle policies** — Buckets accumulating unnecessary storage costs
+- **Idle Load Balancers** — Load balancers with no traffic
 
-## Cost Detection Rules
+## 🔒 Security
 
-The application detects the following cost issues:
+- Passwords hashed with bcrypt
+- JWT tokens for authentication
+- `.env` file excluded from git
+- AWS credentials stored only in environment variables
 
-### EC2 Instances
-- Stopped instances (EBS costs still incur)
-- Over-provisioned instance types
-- Instances without Name tags
+## 🐛 Common Issues & Fixes
 
-### RDS Instances
-- Multi-AZ enabled on non-critical databases
-- Over-provisioned instance classes
-
-### S3 Buckets
-- Empty buckets
-- Large buckets without lifecycle policies
-
-### Load Balancers
-- Load balancers with no registered instances
-
-### Elastic IPs
-- Unassociated Elastic IPs (charged hourly)
-
-## Development
-
-### Backend Development
+### bcrypt version conflict
 ```bash
-cd backend
-source venv/bin/activate
-uvicorn main:app --reload
+pip install bcrypt==4.0.1
 ```
 
-### Frontend Development
+### Missing email-validator
 ```bash
-cd frontend
-npm run dev
+pip install pydantic[email] email-validator
 ```
 
-### Build for Production
+### Missing python-jose
 ```bash
-cd frontend
-npm run build
+pip install python-jose[cryptography]
 ```
 
-## Troubleshooting
+### Port already in use
+```bash
+pkill -f "uvicorn main:app"
+uvicorn main:app --reload --host 0.0.0.0 --port 8001
+```
 
-### Database Connection Issues
-- Ensure PostgreSQL is running
-- Check DATABASE_URL in backend/.env
-- Verify database exists: `psql -l`
+### AWS AuthFailure
+- Check your `.env` has real AWS credentials (not placeholder values)
+- Verify credentials work: `aws sts get-caller-identity`
+- Make sure IAM user has `ReadOnlyAccess` policy
 
-### AWS API Errors
-- Verify AWS credentials are correct
-- Check IAM permissions
-- Ensure region is correct
+### Docker read-only filesystem
+```bash
+docker container prune -f
+docker run -d --name cost-detective-db ...
+```
 
-### Groq API Errors
-- Verify GROQ_API_KEY is valid
-- Check API quota limits
+## 📊 Request Flow
 
-### WebSocket Connection Issues
-- Ensure backend is running on port 8000
-- Check firewall settings
-- Verify CORS configuration in main.py
+```
+① User signs up/logs in → JWT token stored in localStorage
+② User selects AWS region → clicks Run Analysis
+③ Frontend sends POST /api/analyze with JWT header
+④ Backend creates analysis record in PostgreSQL
+⑤ Background task scans AWS resources with Boto3
+⑥ Resources sent to Groq AI for cost analysis
+⑦ Results stored in PostgreSQL
+⑧ Frontend polls GET /api/analysis/{id} every 2 seconds
+⑨ On completion, redirects to Report page
+⑩ Report shows issues, savings, and AWS CLI fix commands
+```
 
-## Security Notes
+## 🔑 Getting API Keys
 
-- Change JWT_SECRET_KEY in production
-- Use environment variables for all sensitive data
-- Enable HTTPS in production
-- Implement rate limiting for API endpoints
-- Regularly rotate AWS credentials
-- Use IAM roles instead of access keys when possible
+### Groq API Key (Free)
+1. Go to `https://console.groq.com`
+2. Sign up → API Keys → Create key
 
-## License
+### AWS Credentials
+1. AWS Console → IAM → Users → your user
+2. Security Credentials → Create Access Key
+3. Attach `ReadOnlyAccess` policy to your IAM user
 
-MIT License
+## 📝 Environment Variables
 
-## Contributing
+| Variable | Description |
+|----------|-------------|
+| `GROQ_API_KEY` | Groq API key for AI analysis |
+| `AWS_ACCESS_KEY_ID` | AWS IAM access key |
+| `AWS_SECRET_ACCESS_KEY` | AWS IAM secret key |
+| `AWS_REGION` | Default AWS region (e.g. ap-southeast-2) |
+| `DATABASE_URL` | PostgreSQL connection string |
+| `JWT_SECRET_KEY` | Secret key for JWT signing |
 
-Contributions are welcome! Please open an issue or submit a pull request.
+## 🎓 Learning Outcomes
+
+- Building full-stack AI applications with FastAPI and React
+- AWS resource scanning with Boto3
+- Integrating LLM APIs (Groq) for intelligent analysis
+- JWT authentication implementation
+- PostgreSQL with SQLAlchemy ORM
+- Background task processing in FastAPI
+- Docker for local development databases
+- Real-world cost optimization techniques
