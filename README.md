@@ -1,10 +1,4 @@
-# AI Cloud Cost Detective
-
-An intelligent AWS cost optimization tool that scans your cloud resources, detects cost issues, and provides AI-powered recommendations for reducing your AWS bill.
-
-## Features
-
-- **AWS Resource Scanning**: Automatically scans EC2, RDS, S3, Load Balancers, and Elastic IPs
+ and Elastic IPs
 - **Cost Issue Detection**: Identifies over-provisioned resources, unused resources, and misconfigurations
 - **AI-Powered Analysis**: Uses Groq API to provide intelligent cost optimization recommendations
 - **Live Progress Updates**: Real-time WebSocket updates during scanning
