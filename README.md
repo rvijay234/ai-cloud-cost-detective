@@ -257,3 +257,53 @@ docker run -d --name cost-detective-db ...
 - Background task processing in FastAPI
 - Docker for local development databases
 - Real-world cost optimization techniques
+
+## 🔐 Security
+
+This project follows DevSecOps practices applied directly to the application, not just bolted on as an afterthought.
+
+### IAM Least Privilege
+- The AWS scanner uses a dedicated IAM user (`cost-detective-scanner`) with a custom policy scoped to exactly the read-only actions the scanner needs (EC2, RDS, S3, EIP, ELB `Describe`/`List` calls only)
+- No broad `ReadOnlyAccess` or admin credentials are used at runtime
+- Policy file: [`cost-detective-scanner-policy.json`](./cost-detective-scanner-policy.json)
+
+### Secrets Management
+- All credentials (AWS keys, Groq API key, JWT secret, DB connection string) are stored in a local `.env` file, excluded from version control via `.gitignore`
+- Verified no secrets were ever committed to git history (`git log --all --full-history -- backend/.env` returns empty)
+- Production recommendation: migrate to **AWS Secrets Manager** or **HashiCorp Vault**, injected at container runtime rather than baked into the image
+
+### JWT Authentication
+- Passwords hashed with bcrypt before storage
+- Access tokens expire after **30 minutes** (tightened from a 7-day default identified during review) to reduce the window of exposure if a token is leaked
+
+### Rate Limiting
+- `/api/auth/login` limited to 10 requests/minute per IP — mitigates brute-force credential attacks
+- `/api/auth/signup` limited to 5 requests/minute per IP — mitigates account enumeration/spam
+- `/api/analyze` limited to 5 requests/minute per IP — prevents abuse of AWS and Groq API quotas
+
+Verified with a scripted brute-force test:
+```bash
+for i in {1..12}; do
+  curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:8001/api/auth/login \
+    -H "Content-Type: application/json" \
+    -d '{"email": "test@test.com", "password": "wrongpass"}'
+done
+# First 10 requests: 401 (Unauthorized)
+# Requests 11-12:    429 (Too Many Requests)
+```
+
+### Input Validation
+- AWS region is validated against an explicit allow-list using a Pydantic validator before any AWS API call is made
+- Invalid input is rejected with a `422` response before reaching AWS or Groq, preventing unnecessary external calls and reducing attack surface
+
+```bash
+curl -X POST http://localhost:8001/api/analyze \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"region": "mars-east-1"}'
+# Response: 422 - "Invalid AWS region: mars-east-1"
+```
+
+### Known Limitations / Production Roadmap
+- No refresh token flow yet — short-lived access tokens require re-login after 30 minutes (acceptable for a portfolio project, would need a refresh token in production)
+- Local `.env` secrets management is suitable for development only — production deployment would use a managed secrets service
+- No container image security scanning yet (planned as part of a dedicated CI/CD security pipeline project)
