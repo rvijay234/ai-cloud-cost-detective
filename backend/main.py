@@ -2,6 +2,9 @@ from fastapi import FastAPI, HTTPException, Depends, WebSocket, WebSocketDisconn
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from typing import List, Dict, Any, Optional
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 import os
 import asyncio
 import traceback
@@ -20,10 +23,16 @@ from auth import (
     get_current_user, authenticate_user
 )
 
+from fastapi import Request
+from pydantic import validator
+
 # Load environment variables from .env file
 load_dotenv()
 
 app = FastAPI(title="AI Cloud Cost Detective API")
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Enable CORS for frontend
 app.add_middleware(
@@ -40,8 +49,21 @@ def startup_event():
     init_db()
 
 
+VALID_AWS_REGIONS = {
+    "us-east-1", "us-east-2", "us-west-1", "us-west-2",
+    "eu-west-1", "eu-west-2", "eu-west-3", "eu-central-1",
+    "ap-south-1", "ap-northeast-1", "ap-northeast-2",
+    "ap-southeast-1", "ap-southeast-2", "ca-central-1"
+}
+
 class AnalyzeRequest(BaseModel):
     region: str = "us-east-1"
+
+    @validator('region')
+    def validate_region(cls, v):
+        if v not in VALID_AWS_REGIONS:
+            raise ValueError(f'Invalid AWS region: {v}')
+        return v
 
 
 class SignupRequest(BaseModel):
@@ -104,10 +126,11 @@ def get_regions():
 
 # Auth endpoints
 @app.post("/api/auth/signup")
-def signup(request: SignupRequest, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+def signup(request: Request, signup_data: SignupRequest, db: Session = Depends(get_db)):
     """Create a new user account"""
     # Check if user already exists
-    existing_user = db.query(User).filter(User.email == request.email).first()
+    existing_user = db.query(User).filter(User.email == signup_data.email).first()
     if existing_user:
         raise HTTPException(
             status_code=400,
@@ -115,8 +138,8 @@ def signup(request: SignupRequest, db: Session = Depends(get_db)):
         )
     
     # Create new user
-    hashed_password = get_password_hash(request.password)
-    new_user = User(email=request.email, password_hash=hashed_password)
+    hashed_password = get_password_hash(signup_data.password)
+    new_user = User(email=signup_data.email, password_hash=hashed_password)
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
@@ -135,9 +158,10 @@ def signup(request: SignupRequest, db: Session = Depends(get_db)):
 
 
 @app.post("/api/auth/login")
-def login(request: LoginRequest, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def login(request: Request, login_data: LoginRequest, db: Session = Depends(get_db)):
     """Login and get access token"""
-    user = authenticate_user(db, request.email, request.password)
+    user = authenticate_user(db, login_data.email, login_data.password)
     if not user:
         raise HTTPException(
             status_code=401,
@@ -167,23 +191,24 @@ def get_me(current_user: User = Depends(get_current_user)):
 
 
 @app.post("/api/analyze")
-async def analyze_resources(request: AnalyzeRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+async def analyze_resources(request: Request, analyze_data: AnalyzeRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """
     Scan AWS resources in the specified region and analyze them for cost optimization
     Returns resource data and AI-powered cost analysis
     Stores results in database and sends progress via WebSocket
     """
     # Validate region
-    if request.region not in AWS_REGIONS:
+    if analyze_data.region not in AWS_REGIONS:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid region '{request.region}'. Must be one of: {', '.join(AWS_REGIONS)}"
+            detail=f"Invalid region '{analyze_data.region}'. Must be one of: {', '.join(AWS_REGIONS)}"
         )
     
     # Create analysis record
     analysis = Analysis(
         user_id=current_user.id,
-        region=request.region,
+        region=analyze_data.region,
         status="pending"
     )
     db.add(analysis)
@@ -193,7 +218,7 @@ async def analyze_resources(request: AnalyzeRequest, current_user: User = Depend
     analysis_id = str(analysis.id)
     
     # Start analysis in background
-    asyncio.create_task(run_analysis(analysis_id, request.region, current_user.id))
+    asyncio.create_task(run_analysis(analysis_id, analyze_data.region, current_user.id))
     
     return {
         "analysis_id": analysis_id,
