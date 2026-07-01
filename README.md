@@ -303,6 +303,18 @@ curl -X POST http://localhost:8001/api/analyze \
 # Response: 422 - "Invalid AWS region: mars-east-1"
 ```
 
+## 📊 Before / After: Real Analysis Results
+
+Validated against a live AWS account in `ap-southeast-2`. The tool detected:
+
+- **Unused Elastic IPs** not attached to any running instance (~$3.60/month each)
+- **Unattached EBS volumes** accumulating storage costs with no active workload
+- **S3 buckets** without lifecycle policies, retaining objects indefinitely
+
+Each finding included an exact AWS CLI remediation command and estimated
+monthly saving. Full sample output available in
+[`docs/sample-analysis-output.json`](docs/sample-analysis-output.json).
+
 ### Known Limitations / Production Roadmap
 - No refresh token flow yet — short-lived access tokens require re-login after 30 minutes (acceptable for a portfolio project, would need a refresh token in production)
 - Local `.env` secrets management is suitable for development only — production deployment would use a managed secrets service
